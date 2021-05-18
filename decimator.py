@@ -1,7 +1,6 @@
 class Decimator:
     def __init__(self, number):
-        assert isinstance(number, int) or isinstance(number, float), 'number must be int or float'
-        assert number >= 0, 'number must not be negative'
+        assert isinstance(number, int) or isinstance(number, float) or self._is_number(number), 'number must be int or float'
         self.number = number
         self.positive_decimals = []
         self.negative_decimals = []
@@ -9,29 +8,33 @@ class Decimator:
 
     def _set(self):
         if isinstance(self.number, int):
-            self.integer_string = str(self.number)
+            assert self.number >= 0, 'number must not be negative'
+            self.number_string = str(self.number)
+            self.integer_string = self.number_string
             self.fraction_string = False
-            self._get_positive_decimals_from_string(self.integer_string)
             self.fraction_precision = 0
         elif isinstance(self.number, float):
-            self.integer_string = str(int(self.number))
-            self.fraction_string = str(self.number - int(self.number))
-            self._get_positive_decimals_from_string(self.integer_string)
+            assert self.number >= 0, 'number must not be negative'
+            self.number_string = str(self.number)
+            n = self.number_string.find('.')
+            self.integer_string = self.number_string[0:n]
+            self.fraction_string = '0' + self.number_string[n:]
             self.fraction_precision = len(self.fraction_string) - 2
-            self._get_negative_decimals_from_string(self.fraction_string)
         elif isinstance(self.number, str):
-            assert self._is_number(self.number), 'string must contain only int or float'
+            assert '-' not in self.number, 'number must not be negative'
+            self.number_string = self.number
             if '.' in self.number:
-                n = number.find('.')
-                self.integer_string = self.number[0:n]
-                self.fraction_string = self.number[n+1:]
-                self._get_positive_decimals_from_string(self.integer_string)
-                self.fraction_precision = len(self.fracton_string) - 2
-                self._get_negative_decimals_from_string(self.fraction_string)
+                n = self.number_string.find('.')
+                self.integer_string = self.number_string[0:n]
+                self.fraction_string = '0' + self.number_string[n:]
+                self.fraction_precision = len(self.fraction_string) - 2
                 pass
             else:
-                self._get_positive_decimals_from_string(self.number)
+                self.integer_string = self.number_string
                 self.fraction_precision = 0
+                self.fraction_string = False
+        self._get_positive_decimals_from_string(self.integer_string)
+        self._get_negative_decimals_from_string(self.fraction_string)
 
     def _is_number(self, number):
         if '.' in number:
@@ -58,11 +61,14 @@ class Decimator:
             value = number[index]
             return int(value)
         except:
-            return 0
+            return '0'
 
     def _get_negative_decimals_from_string(self, fraction):
-        index = 0
+        if not fraction:
+            self.negative_decimals.append(0)
+            return
 
+        index = 0
         while index < self.fraction_precision:
             value = self._get_digit_at_index(fraction, index+2)
             self.negative_decimals.append(value)
@@ -84,10 +90,27 @@ class Decimator:
         pass
 
     def shift(self, shift):
-        assert isinstance(number, int), 'shift must be int'
+        assert isinstance(shift, int), 'shift must be int'
         decimator = Decimator(self.number)
         decimator._shift(shift)
+        decimator._update_strings()
         return decimator
+
+    def _update_strings(self):
+        self.integer_string = self._get_integer_string()
+        self._check_for_zero_fraction()
+        self.fraction_string = '0'+self._get_fraction_string()
+        self._update_fraction_precision()
+
+    def _check_for_zero_fraction(self):
+        if self.get_fractional_value() == 0.0:
+            self.negative_decimals = [0]
+
+    def _update_fraction_precision(self):
+        if self.negative_decimals == [0]:
+            self.fraction_precision = 0
+        else:
+            self.fraction_precision = len(self.negative_decimals)
 
     def _shift(self, shift):
         if shift > 0:
@@ -114,8 +137,10 @@ class Decimator:
         self.negative_decimals.insert(0, value)
 
     def _pop_positive(self):
-        if len(self.positive_decimals) == 0:
-            return 0
+        if len(self.positive_decimals) == 1:
+            pop = self.positive_decimals.pop(0)
+            self.positive_decimals.append(0)
+            return pop
         return self.positive_decimals.pop(0)
 
     def _pop_negative(self):
@@ -124,14 +149,26 @@ class Decimator:
         return self.negative_decimals.pop(0)
 
     def __str__(self):
-        number = ''
-        for decimal in self.positive_decimals:
-            number = str(decimal) + number
+        number = self._get_integer_string()
         if self.fraction_string:
-            number = number + '.'
-            for decimal in self.negative_decimals:
-                number = number + str(decimal)
+            number = number + self._get_fraction_string()
         return number
+
+    def _get_integer_string(self):
+        integer = ''
+        for decimal in self.positive_decimals:
+            integer = str(decimal) + integer
+        return integer
+
+    def _get_fraction_string(self):
+        fraction = ''
+        fraction = fraction + '.'
+        if len(self.negative_decimals) > 0:
+            for decimal in self.negative_decimals:
+                fraction = fraction + str(decimal)
+        else:
+            fraction = fraction + '0'
+        return fraction
 
     ##########################################
     #DO NEXT
@@ -147,7 +184,8 @@ class Decimator:
             self.negative_decimals = self.negative_decimals[0:digits]
 
     def get_value(self):
-        return self.get_integer_value() + self.get_fractional_value()
+        # I have found that the maximum floating point precision that can be trusted is 16
+        return float(self.__str__())
 
     def get_integer_value(self):
         value = 0
